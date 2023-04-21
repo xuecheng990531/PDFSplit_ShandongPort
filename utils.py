@@ -9,20 +9,21 @@ import aiofiles
 import shutil
 import io
 import zipfile
+import multiprocessing as mp
 from fastapi.responses import StreamingResponse
 
-ocr = PaddleOCR(use_angle_cls=False,lang="ch",workers=1,use_gpu=True,det_limit_side_len=1216,use_multiprocess=False)
+ocr = PaddleOCR(use_angle_cls=False,lang="ch",workers=12,use_gpu=True,det_limit_side_len=1216,use_multiprocess=True)
 
 async def save_img(File, filename):
-    async with aiofiles.open(os.path.join('upload_files', filename),'wb') as out_file:
+    async with aiofiles.open(os.path.join('UploadFile', filename),'wb') as out_file:
         content = await File.read()
         await out_file.write(content)
 
 def del_upload_file():
-    dir1 = 'upload_files'
-    dir2 = 'save_files'
-    dir3 = 'split_pdfs'
-    dir4 = 'new_filenames'
+    dir1 = 'UploadFile'
+    dir2 = 'SavePics'
+    dir3 = 'SplitedPDF'
+    dir4 = 'NewPDFs'
     for root, dirs, files in os.walk(dir1):
         for name in files:
             if name.endswith(".pdf"):
@@ -41,7 +42,7 @@ def del_upload_file():
                 os.remove(os.path.join(root, name))
 
 def split_chars(filename):
-    with open(os.path.join('upload_files',str(filename)), 'rb') as input_file:
+    with open(os.path.join('UploadFile',str(filename)), 'rb') as input_file:
         pdf_reader = PyPDF2.PdfFileReader(input_file)
 
         # 创建一个用于保存特定字段之前所有页面的输出 PDF 对象
@@ -53,7 +54,7 @@ def split_chars(filename):
             text = page_obj.extract_text()
             if 'LADING' in text or 'WAYBILL' in text:
                 # 如果发现特定字段，则将之前的所有页面合并为一个 PDF 文件
-                with open('split_pdfs/output_{}.pdf'.format(page_num), 'wb') as output_file:
+                with open('SplitedPDF/output_{}.pdf'.format(page_num), 'wb') as output_file:
                     output_pdf.write(output_file)
                 # 创建一个新的 PDF 输出对象以便下一次使用
                 output_pdf = PyPDF2.PdfFileWriter()
@@ -61,8 +62,20 @@ def split_chars(filename):
             output_pdf.addPage(page_obj)
 
         # 将最后一次创建的 PDF 输出对象写入文件，以包括所剩下的页面
-        with open('split_pdfs/output.pdf', 'wb') as output_file:
+        with open('SplitedPDF/output.pdf', 'wb') as output_file:
             output_pdf.write(output_file)
+        
+        folder_path='SplitedPDF'
+        for file_name in os.listdir(folder_path):
+            print('开始处理{}\n'.format(file_name))
+            file_path = os.path.join(folder_path, file_name)
+            if os.path.isfile(file_path):
+                page_count, img_list=pdf_img(pdfPath=file_path,img_name=file_name)
+                pos,value=detect_pdf(img_list=img_list,page_no=page_count)
+                search_rename(pos,value,file_name)
+            elif os.path.isdir(file_path):
+                # 处理子文件夹
+                traverse_folder(file_path)
 
 def detect_img(img_path):
     result = ocr.ocr(img_path, cls=False)
@@ -101,38 +114,36 @@ def pdf_img(pdfPath, img_name):
     page_count = doc.page_count
     for page in doc:
         pix = page.get_pixmap(dpi=300)  # render page to an image
-        pix.save('save_files/' + img_name +
+        pix.save('SavePics/' + img_name +
                  '_%s.png' % page.number)  # store image as a PNG
-        img_list.append('save_files/' + img_name + '_%s.png' % page.number)
+        img_list.append('SavePics/' + img_name + '_%s.png' % page.number)
     return page_count, img_list
+    
+            
 
 def search_rename(pos,value,name):
     for i in range(len(value)):
-        # if 'Export' in value[i] and len(value[i].split('ort')[-1])!=0:
-        #     shr_pos = pos[i]
-        #     height = pos[i][3][1] - pos[i][0][1]
-        #     width = pos[i][1][0] - pos[i][0][0]
-        #     for i in range(len(pos)):
-        #         if shr_pos[0][0]-width/2 < pos[i][0][0] < shr_pos[1][0] + width*2 and shr_pos[1][1] -height*4 < pos[i][2][1] < shr_pos[1][1]+height/2 and value[i].isdigit():
-        #             print(value[i])
-        #             if os.path.exists('split_pdfs/'+str(name)):
-        #                 shutil.copy('split_pdfs/'+str(name),'new_filenames/')
-        #                 os.rename('new_filenames/'+str(name),'new_filenames/'+str(value[i])+'.pdf')
-
         if value[i].isdigit() and len(value[i])==12:
             result = re.findall(r'\d+', value[i])
             if len(result)!=0:
-                if os.path.exists('split_pdfs/'+str(name)):
-                    shutil.copy('split_pdfs/'+str(name),'new_filenames/')
-                    os.rename('new_filenames/'+str(name),'new_filenames/'+str(result[0])+'.pdf')
+                if os.path.exists('SplitedPDF/'+str(name)):
+                    shutil.copy('SplitedPDF/'+str(name),'NewPDFs/')
+                    os.rename('NewPDFs/'+str(name),'NewPDFs/'+str(result[0])+'.pdf')
                     break
                 break
+        # else:
+        #     if os.path.exists('SplitedPDF/'+str(name)):
+        #         shutil.copy('SplitedPDF/'+str(name),'NewPDFs/')
+        #         os.rename('NewPDFs/'+str(name),'NewPDFs/Wrong.pdf')
 
 
 def rename():
-    dir='split_pdfs'
+    dir='SplitedPDF'
     number=len(os.listdir(dir))
     for i in range(number):
+        print('开始处理第{}张PDF文件\n'.format(i+1))
+        print('剩下{}张等待处理\n'.format(number-(i+1)))
+
         name=os.listdir(dir)[i]
         page_count, img_list=pdf_img(pdfPath=os.path.join(dir,name),img_name=name)
         pos,value=detect_pdf(img_list=img_list,page_no=page_count)

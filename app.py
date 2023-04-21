@@ -24,12 +24,12 @@ app = FastAPI(title='PDF拆分')
 
 
 
-@app.post('/pdf')
-async def ocr(File: UploadFile = File(...)):
-    folder_path = "new_filenames"
+@app.post('/pdf',tags=["执行完成后需要手动点击Download File下载拆分后的PDF文件，900页的pdf文件预计时间为20分钟左右！！"])
+async def ocr(File: UploadFile = File(...,description='上传需要拆分的PDF')):
+    folder_path = "NewPDFs"
     await save_img(File, File.filename)
     split_chars(filename=File.filename)
-    rename()
+    # rename()
 
     zip_file = io.BytesIO()
     with zipfile.ZipFile(zip_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -44,7 +44,7 @@ async def ocr(File: UploadFile = File(...)):
 
     del_upload_file()
     
-    return StreamingResponse(zip_file, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=Split_PDF.zip"})
+    return StreamingResponse(zip_file, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=Splited_PDF.zip"})
     
 
 if __name__ == '__main__':

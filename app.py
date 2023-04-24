@@ -26,14 +26,14 @@ app = FastAPI(title='PDF拆分')
 
 @app.post('/pdf',tags=["执行完成后需要手动点击Download File下载拆分后的PDF文件，900页的pdf文件预计时间为20分钟左右！！"])
 async def ocr(File: UploadFile = File(...,description='上传需要拆分的PDF')):
-    del_upload_file()
     await save_file(File, File.filename)
     split_chars(filename=File.filename)
     # 将所有字符图像文件上传到API端点
     info_return = upload_folder()
+    del_upload_file()
     return HuiZhi(data=info_return)
 
     
 
 if __name__ == '__main__':
-    uvicorn.run(app='app:app', host='0.0.0.0', port=8109, reload=True)
+    uvicorn.run(app='app:app', host='0.0.0.0', port=8009, reload=True)

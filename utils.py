@@ -22,9 +22,18 @@ async def save_file(File, filename):
         content = await File.read()
         await out_file.write(content)
 
+def delete_nonnumeric_pdfs(folder_path):
+    for filename in os.listdir(folder_path):  # 遍历文件夹中的所有文件和子文件夹
+        file_path = os.path.join(folder_path, filename)  # 获取文件路径
+        if os.path.isfile(file_path):  # 如果是文件
+            base_filename, ext = os.path.splitext(filename)  # 拆分文件名和扩展名
+            if ext.lower() == '.pdf' and not base_filename.isdigit():  # 如果是 PDF 文件，并且文件名不是数字开头
+                os.remove(file_path)  # 删除文件
+
+
 def upload_folder() -> List[dict]:
-    url = "xxxxxxxxxx"
-    folder_path = "NewPDFs"  # 替换为要上传的文件夹路径
+    url = "http://api.sdland-sea.com/api-lh-oss/lh-oss/uploadFile"
+    folder_path = "SplitedPDF"  # 替换为要上传的文件夹路径
     metadata_list = []
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
@@ -47,7 +56,7 @@ def upload_folder() -> List[dict]:
 
 
 def HuiZhi(data: dict):
-    url='xxxxxxxxxx'
+    url='https://shipagentgateway.sdland-sea.com/online/api/services/app/EMC/BLDownloadSave'
     headers = {"Content-type": "application/json"}
     response = requests.post(url, json=data, headers=headers)
     if response.status_code == 200:
@@ -64,7 +73,6 @@ def del_upload_file():
     dir1 = 'UploadFile'
     dir2 = 'SavePics'
     dir3 = 'SplitedPDF'
-    dir4 = 'NewPDFs'
     for root, dirs, files in os.walk(dir1):
         for name in files:
             if name.endswith(".pdf"):
@@ -74,10 +82,6 @@ def del_upload_file():
             if name.endswith(".png"):
                 os.remove(os.path.join(root, name))
     for root, dirs, files in os.walk(dir3):
-        for name in files:
-            if name.endswith(".pdf"):
-                os.remove(os.path.join(root, name))
-    for root, dirs, files in os.walk(dir4):
         for name in files:
             if name.endswith(".pdf"):
                 os.remove(os.path.join(root, name))
@@ -114,6 +118,7 @@ def split_chars(filename):
                 page_count, img_list=pdf_img(pdfPath=file_path,img_name=file_name)
                 pos,value=detect_pdf(img_list=img_list,page_no=page_count)
                 search_rename(pos,value,file_name)
+    delete_nonnumeric_pdfs(folder_path)
         
 
         
@@ -169,24 +174,6 @@ def search_rename(pos,value,name):
             result = re.findall(r'\d+', value[i])
             if len(result)!=0:
                 if os.path.exists('SplitedPDF/'+str(name)):
-                    shutil.copy('SplitedPDF/'+str(name),'NewPDFs/')
-                    os.rename('NewPDFs/'+str(name),'NewPDFs/'+str(result[0])+'.pdf')
+                    os.rename('SplitedPDF/'+str(name),'SplitedPDF/'+str(result[0])+'.pdf')
                     break
                 break
-        # else:
-        #     if os.path.exists('SplitedPDF/'+str(name)):
-        #         shutil.copy('SplitedPDF/'+str(name),'NewPDFs/')
-        #         os.rename('NewPDFs/'+str(name),'NewPDFs/Wrong.pdf')
-
-
-def rename():
-    dir='SplitedPDF'
-    number=len(os.listdir(dir))
-    for i in range(number):
-        print('开始处理第{}张PDF文件\n'.format(i+1))
-        print('剩下{}张等待处理\n'.format(number-(i+1)))
-
-        name=os.listdir(dir)[i]
-        page_count, img_list=pdf_img(pdfPath=os.path.join(dir,name),img_name=name)
-        pos,value=detect_pdf(img_list=img_list,page_no=page_count)
-        search_rename(pos,value,name)

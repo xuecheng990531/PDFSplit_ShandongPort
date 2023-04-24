@@ -1,5 +1,8 @@
 import paddleocr
 from paddleocr import  PaddleOCR
+from fastapi import FastAPI, File, UploadFile
+import requests
+from typing import List
 import os
 import fitz
 import re
@@ -14,10 +17,48 @@ from fastapi.responses import StreamingResponse
 
 ocr = PaddleOCR(use_angle_cls=False,lang="ch",workers=12,use_gpu=True,det_limit_side_len=1216,use_multiprocess=True)
 
-async def save_img(File, filename):
+async def save_file(File, filename):
     async with aiofiles.open(os.path.join('UploadFile', filename),'wb') as out_file:
         content = await File.read()
         await out_file.write(content)
+
+def upload_folder() -> List[dict]:
+    url = "http://api.sdland-sea.com/api-lh-oss/lh-oss/uploadFile"
+    folder_path = "NewPDFs"  # 替换为要上传的文件夹路径
+    metadata_list = []
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        if os.path.isfile(file_path):
+            with open(file_path, "rb") as f:
+                files = {"file": (filename, f)}
+                response = requests.post(url, files=files)
+                if response.status_code == 200:
+                    data = response.json()
+                    metadata_list.append({'blno': filename, 'downloadPath': data['url'],"msg": "上传至服务器"})
+                else:
+                    return {'error': f'上传失败：{filename}'}
+                
+        elif os.path.isdir(file_path):
+            return {'error': '不支持上传文件夹内的文件夹'}
+    # OSS服务器返回的信息，包含blno和downloadpath
+    info_return= {"downPathList":metadata_list}
+    return info_return
+
+
+
+def HuiZhi(data: dict):
+    url='https://shipagentgateway.sdland-sea.com/online/api/services/app/EMC/BLDownloadSave'
+    headers = {"Content-type": "application/json"}
+    response = requests.post(url, json=data, headers=headers)
+    if response.status_code == 200:
+        return {
+            "success":response.json()["success"],
+            "msg":response.json()["msg"]
+            }
+    else:
+        return {"error": "Failed to upload JSON data"}
+
+
 
 def del_upload_file():
     dir1 = 'UploadFile'
@@ -73,9 +114,10 @@ def split_chars(filename):
                 page_count, img_list=pdf_img(pdfPath=file_path,img_name=file_name)
                 pos,value=detect_pdf(img_list=img_list,page_no=page_count)
                 search_rename(pos,value,file_name)
-            elif os.path.isdir(file_path):
-                # 处理子文件夹
-                traverse_folder(file_path)
+        
+
+        
+
 
 def detect_img(img_path):
     result = ocr.ocr(img_path, cls=False)

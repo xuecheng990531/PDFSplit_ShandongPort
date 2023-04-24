@@ -23,7 +23,7 @@ async def save_file(File, filename):
         await out_file.write(content)
 
 def upload_folder() -> List[dict]:
-    url = "http://api.sdland-sea.com/api-lh-oss/lh-oss/uploadFile"
+    url = "xxxxxxxxxx"
     folder_path = "NewPDFs"  # 替换为要上传的文件夹路径
     metadata_list = []
     for filename in os.listdir(folder_path):
@@ -47,7 +47,7 @@ def upload_folder() -> List[dict]:
 
 
 def HuiZhi(data: dict):
-    url='https://shipagentgateway.sdland-sea.com/online/api/services/app/EMC/BLDownloadSave'
+    url='xxxxxxxxxx'
     headers = {"Content-type": "application/json"}
     response = requests.post(url, json=data, headers=headers)
     if response.status_code == 200:

@@ -1,12 +1,9 @@
 import os
 import uvicorn
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi import FastAPI, UploadFile, File, applications
-from typing import List
-from starlette.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, applications,BackgroundTasks
 from utils import *
-import shutil
-import zipfile
+import subprocess
 
 def swagger_monkey_patch(*args, **kwargs):
     return get_swagger_ui_html(
@@ -25,15 +22,11 @@ app = FastAPI(title='PDF拆分')
 
 
 @app.post('/pdf',tags=["执行完成后需要手动点击Download File下载拆分后的PDF文件，900页的pdf文件预计时间为20分钟左右！！"])
-async def ocr(File: UploadFile = File(...,description='上传需要拆分的PDF')):
+async def ocr(background_tasks: BackgroundTasks,File: UploadFile = File(...,description='上传需要拆分的PDF')):
     await save_file(File, File.filename)
-    split_chars(filename=File.filename)
-    # 将所有字符图像文件上传到API端点
-    info_return = upload_folder()
-    del_upload_file()
-    return HuiZhi(data=info_return)
-
-    
+    background_tasks.add_task(split_chars, File.filename)
+    background_tasks.add_task(rename)
+    return {"success":True,"Message":"上传成功,后台开始拆分"}
 
 if __name__ == '__main__':
-    uvicorn.run(app='app:app', host='0.0.0.0', port=8009, reload=True)
+    uvicorn.run(app='app:app', host='0.0.0.0', port=8009, reload=True,workers=2)

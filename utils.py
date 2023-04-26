@@ -11,6 +11,7 @@ import PyPDF2
 import aiofiles
 import io
 import logging
+from logutils import *
 
 logging.getLogger('ppocr').setLevel(logging.ERROR)
 ocr = PaddleOCR(use_angle_cls=False,lang="ch",workers=12,use_gpu=True,det_limit_side_len=1216,use_multiprocess=True)
@@ -83,7 +84,7 @@ def rename():
             page_count, img_list=pdf_img(pdfPath=file_path,img_name=file_name)
             pos,value=detect_pdf(img_list=img_list,page_no=page_count)
             search_rename(pos,value,file_name)
-        print('待处理文件还有{}个\n\n=============================================================================================================================='.format(len(os.listdir(folder_path))))
+        print('待处理文件还有{}个'.format(len(os.listdir(folder_path))))
     e=time.time()
     print('处理完成！总用时{}秒'.format(e-s))
             
@@ -157,8 +158,12 @@ def Huizhi(infor):
     response = requests.post(url_huizhi, json=huizhi, headers=headers)
     if response.status_code==200:
         print('HuiZhi Information:',response.json())
+        logger.info(response.json())
+        logger.info("\n")
     else:
         print('Huizhi Server Error!')
+        logger.info('Huizhi Server Error!')
+        logger.info("\n")
 
 
 # # 老版本，因为之前识别右上角的代码会重复，遂删除改为识别左下角条形码上面的数字
@@ -196,11 +201,13 @@ def search_rename(pos,value,name):
                         oss_downlink,state_code=uposs(str(value[i]))
 
                         if state_code==200:
-                            infor=[{'blno': str(value[i]), 'downloadPath': oss_downlink,"msg": "上传至服务器成功"}]
-                            print('==============================================================================================================================\n\nOSS Information:',infor)
+                            infor=[{'blno': str(value[i]), 'downloadPath': oss_downlink,"msg": "success!"}]
+                            print('OSS Information:',infor)
+                            logger.info(infor)
                             Huizhi(infor)
                         else:
                             print('Error!')
+                            logger.info('OSS Error!')
                         os.remove('SplitedPDF/'+str(value[i])+'.pdf')
                         break
                     break

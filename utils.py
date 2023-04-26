@@ -32,11 +32,11 @@ def delete_nonnumeric_pdfs(folder_path):
 
 
 
-def del_savepics_file():
-    for root, dirs, files in os.walk('SavePics'):
-        for name in files:
-            if name.endswith(".png"):
-                os.remove(os.path.join(root, name))
+# def del_savepics_file():
+#     for root, dirs, files in os.walk('SavePics'):
+#         for name in files:
+#             if name.endswith(".png"):
+#                 os.remove(os.path.join(root, name))
 def del_upload_file():
     for root, dirs, files in os.walk('UploadFile'):
         for name in files:
@@ -47,32 +47,32 @@ def split_chars(filename):
     
     dir_path='UploadFile/'
     for filename in os.listdir(dir_path):
-        if filename.endswith(".pdf"):
-            with open(os.path.join('UploadFile',str(filename)), 'rb') as input_file:
-                pdf_reader = PyPDF2.PdfFileReader(input_file)
+        with open(os.path.join('UploadFile',str(filename)), 'rb') as input_file:
+            pdf_reader = PyPDF2.PdfFileReader(input_file)
 
-                # 创建一个用于保存特定字段之前所有页面的输出 PDF 对象
-                output_pdf = PyPDF2.PdfFileWriter()
+            # 创建一个用于保存特定字段之前所有页面的输出 PDF 对象
+            output_pdf = PyPDF2.PdfFileWriter()
 
-                # 遍历每一页，检查是否包含特定字段
-                for page_num in range(pdf_reader.numPages):
-                    page_obj = pdf_reader.getPage(page_num)
-                    text = page_obj.extract_text()
-                    if 'LADING' in text or 'WAYBILL' in text:
-                        # 如果发现特定字段，则将之前的所有页面合并为一个 PDF 文件
-                        with open('SplitedPDF/{}_{}.pdf'.format(filename,page_num), 'wb') as output_file:
-                            output_pdf.write(output_file)
-                        # 创建一个新的 PDF 输出对象以便下一次使用
-                        output_pdf = PyPDF2.PdfFileWriter()
-                    # 否则，将当前页面添加到输出 PDF 对象中
-                    output_pdf.addPage(page_obj)
+            # 遍历每一页，检查是否包含特定字段
+            for page_num in range(pdf_reader.numPages):
+                page_obj = pdf_reader.getPage(page_num)
+                text = page_obj.extract_text()
+                if 'LADING' in text or 'WAYBILL' in text:
+                    # 如果发现特定字段，则将之前的所有页面合并为一个 PDF 文件
+                    with open('SplitedPDF/{}_{}.pdf'.format(filename,page_num), 'wb') as output_file:
+                        output_pdf.write(output_file)
+                    # 创建一个新的 PDF 输出对象以便下一次使用
+                    output_pdf = PyPDF2.PdfFileWriter()
+                # 否则，将当前页面添加到输出 PDF 对象中
+                output_pdf.addPage(page_obj)
 
-                # 将最后一次创建的 PDF 输出对象写入文件，以包括所剩下的页面
-                with open('SplitedPDF/{}.pdf'.format(filename), 'wb') as output_file:
-                    output_pdf.write(output_file)
+            # 将最后一次创建的 PDF 输出对象写入文件，以包括所剩下的页面
+            with open('SplitedPDF/{}.pdf'.format(filename), 'wb') as output_file:
+                output_pdf.write(output_file)
                 
-                os.remove(os.path.join('UploadFile',str(filename)))
+        
         print('文件{}拆分完成，开始重命名\n'.format(str(filename)))
+        os.remove(os.path.join('UploadFile',str(filename)))
                 
 def rename():
     folder_path='SplitedPDF'
@@ -87,8 +87,7 @@ def rename():
     e=time.time()
     print('处理完成！总用时{}秒'.format(e-s))
             
-    # 删除保存的png缓存图片
-    del_savepics_file()
+    
     # 删除没有提单号的pdf
     delete_nonnumeric_pdfs(folder_path)
             
@@ -119,6 +118,8 @@ def detect_pdf(img_list, page_no):
         pos, value = detect_img(img_list[index])
         value_all.extend(value)
         pos_all.extend(pos)
+        if os.path.exists(img_list[index]):
+            os.remove(img_list[index])
     return pos_all, value_all
     
 
@@ -135,13 +136,13 @@ def pdf_img(pdfPath, img_name):
 
 
 def uposs(filename):
-    # url = 'https://led'
+    # url = 'https://lht.sdland-sea.com/api/lh-microwechat/MinIO/uploadSpecified'
     # files = {'file': open('SplitedPDF/'+filename+'.pdf', 'rb')}
     # data = {'bucketName': 'emcpdf'}
     # r = requests.post(url, files=files, data=data)
 
     url_old='http://api.sdland-sea.com/api-lh-oss/lh-oss/uploadFile'
-    files = {'file': open('SplitedPDF/'+filename+'.pdf', 'rb')}
+    files = {'file': open('SplitedPDF/'+str(filename)+'.pdf', 'rb')}
     r = requests.post(url_old, files=files)
     if r.status_code==200:
         # return r.json()['data']['url'],r.status_code
@@ -150,7 +151,7 @@ def uposs(filename):
         print('OSS Upload Server Error!')
 
 def Huizhi(infor):
-    url_huizhi='httpes/app/EMC/BLDownloadSave'
+    url_huizhi='https://shipagentgateway.sdland-sea.com/online/api/services/app/EMC/BLDownloadSave'
     huizhi={"downPathList":infor}
     headers = {"Content-type": "application/json"}
     response = requests.post(url_huizhi, json=huizhi, headers=headers)
@@ -159,23 +160,47 @@ def Huizhi(infor):
     else:
         print('Huizhi Server Error!')
 
+
+# # 老版本，因为之前识别右上角的代码会重复，遂删除改为识别左下角条形码上面的数字
+# def search_rename(pos,value,name):
+#     for i in range(len(value)):
+#         if value[i].isdigit() and len(value[i])==12:
+#             result = re.findall(r'\d+', value[i])
+#             if len(result)!=0:
+#                 if os.path.exists('SplitedPDF/'+str(name)):
+#                     os.rename('SplitedPDF/'+str(name),'SplitedPDF/'+str(result[0])+'.pdf')
+#                     oss_downlink,state_code=uposs(str(result[0]))
+
+#                     if state_code==200:
+#                         infor=[{'blno': str(result[0]), 'downloadPath': oss_downlink,"msg": "上传至服务器成功"}]
+#                         print('==============================================================================================================================\n\nOSS Information:',infor)
+#                         Huizhi(infor)
+#                     else:
+#                         print('Error!')
+
+#                     os.remove('SplitedPDF/'+str(result[0])+'.pdf')
+#                     break
+#                 break
+
+# 新版本，识别左下角条形码上面的数字
 def search_rename(pos,value,name):
     for i in range(len(value)):
-        if value[i].isdigit() and len(value[i])==12:
-            result = re.findall(r'\d+', value[i])
-            if len(result)!=0:
-                if os.path.exists('SplitedPDF/'+str(name)):
-                    os.rename('SplitedPDF/'+str(name),'SplitedPDF/'+str(result[0])+'.pdf')
-                    oss_downlink,state_code=uposs(str(result[0]))
+        if 'EGLV' in value[i]:
+            shr_pos = pos[i]
+            height = pos[i][3][1] - pos[i][0][1]
+            width = pos[i][1][0] - pos[i][0][0]
+            for i in range(len(pos)):
+                if shr_pos[0][0] - width / 2 < pos[i][0][0] < shr_pos[1][0] and shr_pos[3][1] - height/2 < pos[i][0][1] < shr_pos[3][1] +height*2 and len(value[i])==12 and value[i][1:5].isdigit():
+                    if os.path.exists('SplitedPDF/'+str(name)):
+                        os.rename('SplitedPDF/'+str(name),'SplitedPDF/'+str(value[i])+'.pdf')
+                        oss_downlink,state_code=uposs(str(value[i]))
 
-                    if state_code==200:
-                        infor=[{'blno': str(result[0]), 'downloadPath': oss_downlink,"msg": "上传至服务器成功"}]
-                        print('==============================================================================================================================\n\nOSS Information:',infor)
-                        Huizhi(infor)
-                    else:
-                        print('Error!')
-
-                    os.remove('SplitedPDF/'+str(result[0])+'.pdf')
+                        if state_code==200:
+                            infor=[{'blno': str(value[i]), 'downloadPath': oss_downlink,"msg": "上传至服务器成功"}]
+                            print('==============================================================================================================================\n\nOSS Information:',infor)
+                            Huizhi(infor)
+                        else:
+                            print('Error!')
+                        os.remove('SplitedPDF/'+str(value[i])+'.pdf')
+                        break
                     break
-                break
-    

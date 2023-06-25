@@ -3,7 +3,6 @@ import uvicorn
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi import FastAPI, UploadFile, File, applications,BackgroundTasks,Depends
 from utils import *
-import subprocess
 
 def swagger_monkey_patch(*args, **kwargs):
     return get_swagger_ui_html(
@@ -24,8 +23,7 @@ async def add_delay():
 
 @app.post('/pdf',tags=["执行完成后需要手动点击Download File下载拆分后的PDF文件，900页的pdf文件预计时间为20分钟左右！！"])
 async def ocr(background_tasks: BackgroundTasks,File: UploadFile = File(...,description='上传需要拆分的PDF'),delay: bool = Depends(add_delay)):
-    # 删除保存的png缓存图片
-    # del_savepics_file()
+
     
     await save_file(File, File.filename)
     background_tasks.add_task(split_chars, File.filename)

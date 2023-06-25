@@ -1,6 +1,6 @@
 import paddleocr
 from paddleocr import  PaddleOCR
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File
 import requests
 import os
 import fitz
@@ -32,12 +32,6 @@ def delete_nonnumeric_pdfs(folder_path):
                 os.remove(file_path)  # 删除文件
 
 
-
-# def del_savepics_file():
-#     for root, dirs, files in os.walk('SavePics'):
-#         for name in files:
-#             if name.endswith(".png"):
-#                 os.remove(os.path.join(root, name))
 def del_upload_file():
     for root, dirs, files in os.walk('UploadFile'):
         for name in files:
@@ -99,16 +93,12 @@ def detect_img(img_path):
     result = ocr.ocr(img_path, cls=False)
     pos = []
     value = []
-    # version = paddleocr.VERSION
-    # if '2.6' in version:
+
     result = result[0]
     for i in range(len(result)):
         pos.append(result[i][0])
         value.append(result[i][1][0])
-    # else:
-    #     for i in range(len(result)):
-    #         pos.append(result[i][0])
-    #         value.append(result[i][1][0])
+
     return pos, value
 
 
@@ -137,10 +127,7 @@ def pdf_img(pdfPath, img_name):
 
 
 def uposs(filename):
-    # url = 'https://lht.sdland-sea.com/api/lh-microwechat/MinIO/uploadSpecified'
-    # files = {'file': open('SplitedPDF/'+filename+'.pdf', 'rb')}
-    # data = {'bucketName': 'emcpdf'}
-    # r = requests.post(url, files=files, data=data)
+
 
     url_old='http://api.sdland-sea.com/api-lh-oss/lh-oss/uploadFile'
     files = {'file': open('SplitedPDF/'+str(filename)+'.pdf', 'rb')}
@@ -166,28 +153,6 @@ def Huizhi(infor):
         logger.info("\n")
 
 
-# # 老版本，因为之前识别右上角的代码会重复，遂删除改为识别左下角条形码上面的数字
-# def search_rename(pos,value,name):
-#     for i in range(len(value)):
-#         if value[i].isdigit() and len(value[i])==12:
-#             result = re.findall(r'\d+', value[i])
-#             if len(result)!=0:
-#                 if os.path.exists('SplitedPDF/'+str(name)):
-#                     os.rename('SplitedPDF/'+str(name),'SplitedPDF/'+str(result[0])+'.pdf')
-#                     oss_downlink,state_code=uposs(str(result[0]))
-
-#                     if state_code==200:
-#                         infor=[{'blno': str(result[0]), 'downloadPath': oss_downlink,"msg": "上传至服务器成功"}]
-#                         print('==============================================================================================================================\n\nOSS Information:',infor)
-#                         Huizhi(infor)
-#                     else:
-#                         print('Error!')
-
-#                     os.remove('SplitedPDF/'+str(result[0])+'.pdf')
-#                     break
-#                 break
-
-# 新版本，识别左下角条形码上面的数字
 def search_rename(pos,value,name):
     for i in range(len(value)):
         if 'EGLV' in value[i]:

@@ -1,15 +1,11 @@
-import paddleocr
 from paddleocr import  PaddleOCR
-from fastapi import FastAPI, File
 import requests
 import os
 import fitz
 import  time
-import re
 #2.5.0
 import PyPDF2
 import aiofiles
-import io
 import logging
 from logutils import *
 

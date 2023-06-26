@@ -1,4 +1,3 @@
-import os
 import uvicorn
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi import FastAPI, UploadFile, File, applications,BackgroundTasks,Depends

@@ -1,3 +1,4 @@
+#2025年起弃用，OSS上传地址过期
 from paddleocr import  PaddleOCR
 import requests
 import os

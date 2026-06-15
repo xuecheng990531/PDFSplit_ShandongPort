@@ -9,6 +9,8 @@ import asyncio
 from collections import defaultdict
 from paddleocr import PaddleOCR
 from logutils import *
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # 日志配置，输出到标准输出
 logging.basicConfig(
@@ -24,10 +26,7 @@ logging.getLogger('ppocr').setLevel(logging.INFO)
 ocr = PaddleOCR(
     use_angle_cls=False,
     lang="ch",
-    workers=12,
-    use_gpu=True,
-    det_limit_side_len=1216,
-    use_multiprocess=True
+    det_limit_side_len=1216
 )
 
 async def save_file(File, filename):
@@ -38,16 +37,44 @@ async def save_file(File, filename):
     t_logger.info('文件上传成功: %s', filename)
 
 
+def render_page_to_image(page, img_name, page_num):
+    """渲染单页PDF为图片的线程函数"""
+    pix = page.get_pixmap(dpi=150)
+    img_path = f"SavePics/{img_name}_{page_num}.png"
+    os.makedirs(os.path.dirname(img_path), exist_ok=True)
+    pix.save(img_path)
+    return img_path
+
+
 def pdf_img(pdf_path, img_name):
-    """将 PDF 渲染为图片列表"""
+    """使用多线程将 PDF 渲染为图片列表"""
     img_list = []
     doc = fitz.open(pdf_path)
-    for page in doc:
-        pix = page.get_pixmap(dpi=150)
-        img_path = f"SavePics/{img_name}_{page.number}.png"
-        os.makedirs(os.path.dirname(img_path), exist_ok=True)
-        pix.save(img_path)
-        img_list.append(img_path)
+    
+    # 使用线程池并行处理页面渲染
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_to_page = {
+            executor.submit(render_page_to_image, doc[i], img_name, i): i 
+            for i in range(len(doc))
+        }
+        
+        # 收集结果，保持页面顺序
+        results = {}
+        for future in as_completed(future_to_page):
+            page_num = future_to_page[future]
+            try:
+                img_path = future.result()
+                results[page_num] = img_path
+                t_logger.info('页面 %d 渲染完成: %s', page_num, img_path)
+            except Exception as e:
+                t_logger.error('页面 %d 渲染失败: %s', page_num, str(e))
+                results[page_num] = None
+    
+    # 按页面顺序排列结果
+    for i in range(len(doc)):
+        if results.get(i):
+            img_list.append(results[i])
+    
     return doc.page_count, img_list
 
 
@@ -116,6 +143,39 @@ def Huizhi(info):
         t_logger.error('回执失败: payload=%s, 状态=%s', info, resp.status_code)
 
 
+def merge_and_upload_group(code_key, items, split_dir, merged_dir):
+    """合并单个组的PDF文件并立即上传"""
+    items.sort(key=lambda x: x[0])
+    merger = PyPDF2.PdfFileMerger()
+    for _, fn in items:
+        merger.append(os.path.join(split_dir, fn))
+    merged_file = os.path.join(merged_dir, f"{code_key}.pdf")
+    with open(merged_file, 'wb') as mo:
+        merger.write(mo)
+    merger.close()
+    t_logger.info('已生成合并文件: %s', merged_file)
+
+    # 删除拆分文件
+    for _, fn in items:
+        split_file_path = os.path.join(split_dir, fn)
+        if os.path.exists(split_file_path):
+            os.remove(split_file_path)
+    t_logger.info('已删除拆分文件, 代码: %s', code_key)
+
+    # 立即上传并回执
+    oss_url, status = uposs(code_key)
+    if status == 200 and oss_url:
+        info = [{'blno': code_key, 'downloadPath': oss_url, 'msg': 'success!'}]
+        print('上传成功，回执信息:', info)
+        t_logger.info('上传成功，回执信息: %s', info)
+        Huizhi(info)
+        t_logger.info('准备删除本地合并文件: %s', merged_file)
+        os.remove(merged_file)
+        t_logger.info('已删除本地合并文件: %s', merged_file)
+    else:
+        t_logger.error('上传失败, 合并文件保留: %s', merged_file)
+
+
 def handle_file(filename):
     """处理单个上传文件：拆分、合并、上传、清理"""
     upload_dir, split_dir, merged_dir = 'UploadFile', 'SplitedPDF', 'MergedPDF'
@@ -131,6 +191,8 @@ def handle_file(filename):
     page_count, img_list = pdf_img(path, base)
     reader = PyPDF2.PdfFileReader(open(path, 'rb'))
     split_files = []
+    groups = defaultdict(list)  # 用于收集同一代码的页面
+    
     for i in range(page_count):
         page = reader.getPage(i)
         pos, vals = detect_img(img_list[i])
@@ -163,42 +225,22 @@ def handle_file(filename):
         with open(split_path, 'wb') as fo:
             writer.write(fo)
         split_files.append(split_name)
+        groups[code].append((idx, split_name))
         t_logger.info('已生成拆分文件: %s', split_name)
 
-    # 合并并上传
-    groups = defaultdict(list)
-    for name in split_files:
-        code_key, idx = os.path.splitext(name)[0].rsplit('_', 1)
-        groups[code_key].append((int(idx), name))
-
-    for code_key, items in groups.items():
-        items.sort(key=lambda x: x[0])
-        merger = PyPDF2.PdfFileMerger()
-        for _, fn in items:
-            merger.append(os.path.join(split_dir, fn))
-        merged_file = os.path.join(merged_dir, f"{code_key}.pdf")
-        with open(merged_file, 'wb') as mo:
-            merger.write(mo)
-        merger.close()
-        t_logger.info('已生成合并文件: %s', merged_file)
-
-        # 删除拆分文件
-        for _, fn in items:
-            os.remove(os.path.join(split_dir, fn))
-        t_logger.info('已删除拆分文件, 代码: %s', code_key)
-
-        # 上传并回执
-        oss_url, status = uposs(code_key)
-        if status == 200 and oss_url:
-            info = [{'blno': code_key, 'downloadPath': oss_url, 'msg': 'success!'}]
-            print('上传成功，回执信息:', info)
-            t_logger.info('上传成功，回执信息: %s', info)
-            Huizhi(info)
-            t_logger.info('准备删除本地合并文件: %s', merged_file)
-            os.remove(merged_file)
-            t_logger.info('已删除本地合并文件: %s', merged_file)
-        else:
-            t_logger.error('上传失败, 合并文件保留: %s', merged_file)
+    # 使用线程池并行处理合并和上传
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = []
+        for code_key, items in groups.items():
+            future = executor.submit(merge_and_upload_group, code_key, items, split_dir, merged_dir)
+            futures.append(future)
+        
+        # 等待所有合并和上传完成
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                t_logger.error('合并上传过程中出错: %s', str(e))
 
     # 删除源文件
     os.remove(path)

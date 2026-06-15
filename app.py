@@ -12,4 +12,4 @@ async def ocr(background_tasks: BackgroundTasks,File: UploadFile = File(...,desc
     return {"success":True,"Message":"上传成功,后台开始拆分"}
 
 if __name__ == '__main__':
-    uvicorn.run(app='app:app', host='0.0.0.0', port=8009, reload=True,workers=2)
+    uvicorn.run(app='app:app', host='0.0.0.0', port=8009, reload=True,workers=1)
